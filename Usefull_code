@@ -21,3 +21,27 @@ for i, new_col in enumerate(new_columns):
 
 # Display the DataFrame
 df_filtered.show()
+
+
+≈=============/===============
+# Step 1: Extract the first 2 rows to use as header rows
+header_rows = df.limit(2).collect()
+
+# Step 2: Set up new column names combining both rows
+column_names = [f"{str(header_rows[0][i])} ({str(header_rows[1][i])})" for i in range(len(header_rows[0]))]
+
+# Step 3: Skip the first 2 rows and keep the remaining data
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+# Add row number to identify and filter out the first 2 rows
+df_with_row_num = df.withColumn("row_num", F.row_number().over(Window.orderBy(F.monotonically_increasing_id())))
+
+# Filter out the first 2 rows, keeping only the data rows
+df_filtered = df_with_row_num.filter(F.col("row_num") > 2).drop("row_num")
+
+# Step 4: Rename columns with the new headers
+df_final = df_filtered.toDF(*column_names)
+
+# Display the final DataFrame
+df_final.show()
