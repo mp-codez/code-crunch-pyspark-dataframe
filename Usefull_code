@@ -74,3 +74,54 @@ df_final = spark.createDataFrame(df_filtered.rdd, schema)
 
 # Display the final DataFrame
 df_final.show()
+
+
+
+№########
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("PartialPressureCalculation").getOrCreate()
+
+def partial_pressure(df_s, df_xy, lst):
+    # Select only the relevant columns
+    df_mini = df_xy.select("LibraryID", "ExperimentID", "Position", "Pre-InjectPressure")
+
+    # Get the first and last occurrences by grouping with a window function
+    window_spec = Window.partitionBy("LibraryID", "ExperimentID", "Position").orderBy("some_order_column")  # Replace 'some_order_column' with a timestamp or other order indicator if available.
+
+    # First occurrence
+    first_occurrences = df_mini.withColumn("first_occurrence", F.first("Pre-InjectPressure").over(window_spec))
+
+    # Last occurrence
+    last_occurrences = df_mini.withColumn("last_occurrence", F.last("Pre-InjectPressure").over(window_spec))
+
+    # Calculate the difference between the first and last occurrences
+    result_df = first_occurrences.join(last_occurrences, on=["LibraryID", "ExperimentID", "Position"])
+    result_df = result_df.withColumn(lst[92], F.col("last_occurrence") - F.col("first_occurrence"))
+
+    # Remove duplicates, keeping only the last occurrence of each group
+    result_df = result_df.dropDuplicates(["LibraryID", "ExperimentID", "Position"])
+
+    # Sort the DataFrame by specified columns
+    result_df = result_df.orderBy("LibraryID", "ExperimentID", "Position")
+
+    # Create a unique identifier by concatenating columns
+    result_df = result_df.withColumn("Unique Experiment ID (PPR = LibID+ExpID)", 
+                                     F.concat_ws("-", F.col("LibraryID"), F.col("ExperimentID")))
+
+    # Drop unnecessary columns
+    result_df = result_df.drop("LibraryID", "ExperimentID", "Pre-InjectPressure")
+
+    # Assuming df_s has the relevant columns to merge with, we join it on the unique experiment ID
+    merged_df = df_s.join(result_df, df_s["Unique Experiment ID (PPR = LibID+ExpID)"] == result_df["Unique Experiment ID (PPR = LibID+ExpID)"], "left")
+
+    # Drop the 'Position' column from the final DataFrame, if needed
+    merged_df = merged_df.drop("Position")
+
+    return merged_df
+
+# Use the function with your DataFrames
+# result_df = partial_pressure(df_s, df_xy, lst)
