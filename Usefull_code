@@ -125,3 +125,21 @@ def partial_pressure(df_s, df_xy, lst):
 
 # Use the function with your DataFrames
 # result_df = partial_pressure(df_s, df_xy, lst)
+
+
+______<&><<<<<<<
+from pyspark.sql.functions import col, sum as spark_sum, when
+from pyspark.sql import DataFrame
+
+# Assuming liquid_columns is a list of column names
+liquid_columns = ['col1', 'col2', 'col3']  # Replace with your actual column names
+
+# Convert columns to numeric, handle errors by replacing invalid values with null, and sum them
+df_s = df_s.select(
+    *df_s.columns,
+    spark_sum(
+        *[when(col(c).cast('double').isNotNull(), col(c).cast('double')).otherwise(0) for c in liquid_columns]
+    ).alias('sum_column')
+)
+
+df_s.show()
