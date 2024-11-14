@@ -143,3 +143,50 @@ df_s = df_s.select(
 )
 
 df_s.show()
+
+
+
+≈=====================
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import coalesce
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("Update Columns Example").getOrCreate()
+
+# Sample DataFrames (Assume `df1` and `df2` are defined similarly in your setup)
+data1 = [
+    (1, "A", 100, "val1", "val2", "val3", "val4"),
+    (2, "B", 200, "val5", "val6", "val7", "val8")
+]
+columns1 = ["col1", "col2", "col3", "fill_col1", "fill_col2", "fill_col3", "fill_col4"]
+df1 = spark.createDataFrame(data1, columns1)
+
+data2 = [
+    (1, "A", 100, None, None, None, None),
+    (2, "B", 200, None, None, None, None),
+    (3, "C", 300, "existing1", "existing2", "existing3", "existing4")
+]
+columns2 = ["col1", "col2", "col3", "fill_col1", "fill_col2", "fill_col3", "fill_col4"]
+df2 = spark.createDataFrame(data2, columns2)
+
+# Perform a left join on the common columns
+joined_df = df2.alias("df2").join(
+    df1.alias("df1"),
+    on=(df2["col1"] == df1["col1"]) & 
+       (df2["col2"] == df1["col2"]) & 
+       (df2["col3"] == df1["col3"]),
+    how="left"
+)
+
+# Select all columns from df2, but update the target columns using coalesce
+# Coalesce will pick values from df1 when they exist, otherwise df2 values are retained
+updated_df2 = joined_df.select(
+    df2["col1"], df2["col2"], df2["col3"],  # The common columns
+    coalesce(df1["fill_col1"], df2["fill_col1"]).alias("fill_col1"),
+    coalesce(df1["fill_col2"], df2["fill_col2"]).alias("fill_col2"),
+    coalesce(df1["fill_col3"], df2["fill_col3"]).alias("fill_col3"),
+    coalesce(df1["fill_col4"], df2["fill_col4"]).alias("fill_col4")
+)
+
+# Show the updated DataFrame
+updated_df2.show()
