@@ -190,3 +190,75 @@ updated_df2 = joined_df.select(
 
 # Show the updated DataFrame
 updated_df2.show()
+
+
+≈======================================
+import boto3
+import math
+from boto3.s3.transfer import TransferConfig
+
+def multipart_upload(bucket_name, file_path, object_name):
+    s3_client = boto3.client('s3')
+
+    # Define the part size (e.g., 5 MB)
+    part_size = 5 * 1024 * 1024
+
+    # Get the file size
+    file_size = os.path.getsize(file_path)
+
+    # Create a transfer configuration
+    config = TransferConfig(multipart_chunksize=part_size, use_threads=True)
+
+    # Upload the file using multipart upload
+    with open(file_path, 'rb') as file:
+        s3_client.upload_fileobj(
+            file,
+            bucket_name,
+            object_name,
+            Config=config
+        )
+    print(f"{file_path} uploaded to S3 bucket {bucket_name} as {object_name}.")
+
+# Example usage
+multipart_upload(
+    bucket_name='your-bucket-name',
+    file_path='/path/to/large/file.txt',
+    object_name='large-file.txt'
+)
+
+============≈==============//=========
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def send_email(sender_email, receiver_email, subject, body, smtp_server, port, username=None, password=None):
+    try:
+        # Create a MIMEText email
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Establish connection with the SMTP server
+        with smtplib.SMTP(smtp_server, port) as server:
+            server.starttls()  # Start TLS encryption
+            if username and password:
+                server.login(username, password)  # Authenticate with the server
+            server.sendmail(sender_email, receiver_email, msg.as_string())  # Send the email
+        
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+# Example usage
+send_email(
+    sender_email="your_email@example.com",
+    receiver_email="recipient_email@example.com",
+    subject="Test Email",
+    body="This is a test email sent from Python.",
+    smtp_server="smtp.example.com",  # Replace with your SMTP server
+    port=587,  # Use 465 for SSL or 587 for TLS
+    username="your_email_username",  # Optional if server requires authentication
+    password="your_email_password"   # Optional if server requires authentication
+)
