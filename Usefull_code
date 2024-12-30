@@ -262,3 +262,68 @@ send_email(
     username="your_email_username",  # Optional if server requires authentication
     password="your_email_password"   # Optional if server requires authentication
 )
+
+
+≈===============
+import smtplib
+import socket
+import time
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def is_server_up(host, port):
+    """
+    Check if the server is up by attempting a socket connection.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=5):
+            return True
+    except (socket.timeout, ConnectionError):
+        return False
+
+def send_email(sender_email, sender_password, recipient_email, subject, body):
+    """
+    Send an email notification using SMTP.
+    """
+    try:
+        # Set up the email
+        message = MIMEMultipart()
+        message['From'] = sender_email
+        message['To'] = recipient_email
+        message['Subject'] = subject
+        message.attach(MIMEText(body, 'plain'))
+        
+        # Connect to the SMTP server and send the email
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(message)
+        print("Email sent successfully.")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+def monitor_server(host, port, sender_email, sender_password, recipient_email):
+    """
+    Monitor server status every 5 minutes and send email if server is down.
+    """
+    while True:
+        if not is_server_up(host, port):
+            subject = f"Alert: Server {host} is Down"
+            body = f"The server at {host} on port {port} is not responding."
+            print(body)  # Log the issue
+            send_email(sender_email, sender_password, recipient_email, subject, body)
+        else:
+            print(f"The server {host} is up and running.")  # Log the status
+        time.sleep(300)  # Wait for 5 minutes before the next check
+
+if __name__ == "__main__":
+    # Server details
+    host = "your_server_ip_or_hostname"
+    port = 80  # Change to the port you want to monitor
+
+    # Email details
+    sender_email = "your_email@gmail.com"
+    sender_password = "your_email_password"  # Use an app password if needed
+    recipient_email = "recipient_email@gmail.com"
+
+    monitor_server(host, port, sender_email, sender_password, recipient_email)
