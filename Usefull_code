@@ -327,3 +327,54 @@ if __name__ == "__main__":
     recipient_email = "recipient_email@gmail.com"
 
     monitor_server(host, port, sender_email, sender_password, recipient_email)
+
+
+
+==========
+from fastapi import FastAPI, Form, HTTPException
+from pydantic import BaseModel
+import os
+from typing import Optional
+import boto3
+from boto3.s3.transfer import TransferConfig
+from datetime import datetime
+import uuid
+
+app = FastAPI()
+
+def upload_file_with_transfer_manager(file_path: str, bucket_name: str, client_id: Optional[str] = None):
+    """
+    Upload a file using TransferManager with a unique key for each client.
+    """
+    client = boto3.client(
+        's3',
+        endpoint_url='http://ozone-server:9878',  # Replace with your Ozone endpoint
+        aws_access_key_id='your_access_key',
+        aws_secret_access_key='your_secret_key'
+    )
+
+    unique_id = uuid.uuid4()
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    key_name = f"{client_id}_{timestamp}_{unique_id}_{os.path.basename(file_path)}" if client_id else f"{timestamp}_{unique_id}_{os.path.basename(file_path)}"
+
+    config = TransferConfig(
+        multipart_threshold=5 * 1024 * 1024,
+        multipart_chunksize=5 * 1024 * 1024,
+        use_threads=True
+    )
+
+    try:
+        client.upload_file(
+            Filename=file_path,
+            Bucket=bucket_name,
+            Key=key_name,
+            Config=config
+        )
+        return f"File {file_path} uploaded successfully as {key_name}."
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload/")
+def upload_file(file_path: str = Form(...), client_id: Optional[str] = Form(None)):
+    bucket_name = "your-bucket-name"
+    return {"message": upload_file_with_transfer_manager(file_path, bucket_name, client_id)}
