@@ -378,3 +378,83 @@ def upload_file_with_transfer_manager(file_path: str, bucket_name: str, client_i
 def upload_file(file_path: str = Form(...), client_id: Optional[str] = Form(None)):
     bucket_name = "your-bucket-name"
     return {"message": upload_file_with_transfer_manager(file_path, bucket_name, client_id)}
+
+
+
+===============
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import JSONResponse
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+app = FastAPI()
+
+@app.post("/multipart-upload/")
+async def multipart_upload(
+    file: UploadFile = File(...),
+    bucket_name: str = Form(...),
+    key: str = Form(...),
+    access_key: str = Form(...),
+    secret_key: str = Form(...),
+    endpoint_url: str = Form(...),
+):
+    """
+    Multipart upload with internal chunking using UploadFile.
+    
+    Parameters:
+    - file: File to upload (from UploadFile).
+    - bucket_name: Target bucket in the storage service.
+    - key: Destination path or key in the bucket.
+    - access_key: Access key for authentication.
+    - secret_key: Secret key for authentication.
+    - endpoint_url: Endpoint URL for the S3-compatible service.
+    """
+    try:
+        # Initialize the S3 client
+        s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            endpoint_url=endpoint_url,
+        )
+
+        # Start multipart upload
+        multipart_upload = s3_client.create_multipart_upload(Bucket=bucket_name, Key=key)
+        upload_id = multipart_upload["UploadId"]
+
+        # Chunk size (5 MB as required by S3-compatible services)
+        chunk_size = 5 * 1024 * 1024
+        parts = []
+        part_number = 1
+
+        # Read and upload the file in chunks
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            response = s3_client.upload_part(
+                Bucket=bucket_name,
+                Key=key,
+                PartNumber=part_number,
+                UploadId=upload_id,
+                Body=chunk,
+            )
+            parts.append({"ETag": response["ETag"], "PartNumber": part_number})
+            part_number += 1
+
+        # Complete the multipart upload
+        s3_client.complete_multipart_upload(
+            Bucket=bucket_name,
+            Key=key,
+            MultipartUpload={"Parts": parts},
+            UploadId=upload_id,
+        )
+
+        return {"message": "File uploaded successfully", "key": key}
+    except (BotoCoreError, ClientError) as e:
+        # Abort the multipart upload if something goes wrong
+        try:
+            s3_client.abort_multipart_upload(Bucket=bucket_name, Key=key, UploadId=upload_id)
+        except Exception:
+            pass  # Silent abort failure
+        return JSONResponse(status_code=500, content={"error": str(e)})
