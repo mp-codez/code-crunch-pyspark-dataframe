@@ -458,3 +458,40 @@ async def multipart_upload(
         except Exception:
             pass  # Silent abort failure
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+====================
+from pyspark.sql import SparkSession
+
+# Initialize SparkSession with Iceberg configurations
+spark = SparkSession.builder \
+    .appName("IcebergExample") \
+    .config("spark.sql.catalog.my_catalog", "org.apache.iceberg.spark.SparkCatalog") \
+    .config("spark.sql.catalog.my_catalog.type", "hadoop") \
+    .config("spark.sql.catalog.my_catalog.warehouse", "hdfs://namenode:8020/warehouse/path") \
+    .getOrCreate()
+
+# Read an Iceberg table
+iceberg_table = spark.read.format("iceberg").load("my_catalog.database_name.table_name")
+
+# Show data from the Iceberg table
+iceberg_table.show()
+
+# Create a new Iceberg table
+spark.sql("""
+CREATE TABLE my_catalog.database_name.new_table_name (
+    id INT,
+    name STRING,
+    age INT
+) USING iceberg
+""")
+
+# Insert data into the new Iceberg table
+data = [(1, "Alice", 30), (2, "Bob", 25)]
+df = spark.createDataFrame(data, schema=["id", "name", "age"])
+
+# Write data to the Iceberg table
+df.write.format("iceberg").mode("append").save("my_catalog.database_name.new_table_name")
+
+# Verify the data in the new table
+spark.sql("SELECT * FROM my_catalog.database_name.new_table_name").show()
