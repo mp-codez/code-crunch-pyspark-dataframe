@@ -495,3 +495,75 @@ df.write.format("iceberg").mode("append").save("my_catalog.database_name.new_tab
 
 # Verify the data in the new table
 spark.sql("SELECT * FROM my_catalog.database_name.new_table_name").show()
+
+
+
+==========÷=======
+import os
+import pandas as pd
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit, col
+from pyspark.sql import DataFrame
+
+# Initialize Spark session
+spark = SparkSession.builder \
+    .appName("Global RowOrder") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# Path to the directory containing Excel files
+parent_dir = "/path/to/library/folders"
+
+# Function to process each file and add local RowOrder
+def process_excel_with_local_roworder(file_path, library_id, file_index, cumulative_offset):
+    # Read Excel file into pandas
+    pandas_df = pd.read_excel(file_path)
+
+    # Add local RowOrder (starting from 0 for each file)
+    pandas_df["LocalRowOrder"] = range(len(pandas_df))
+
+    # Add a cumulative offset to make RowOrder globally unique
+    pandas_df["RowOrder"] = pandas_df["LocalRowOrder"] + cumulative_offset
+
+    # Add LibraryID for tracking
+    pandas_df["LibraryID"] = library_id
+
+    # Convert to PySpark DataFrame
+    spark_df = spark.createDataFrame(pandas_df)
+
+    return spark_df
+
+# Initialize variables to track cumulative row offsets
+all_spark_dfs = []
+cumulative_offset = 0
+
+# Process all files in the directory
+for file_index, library_folder in enumerate(os.listdir(parent_dir)):
+    folder_path = os.path.join(parent_dir, library_folder)
+    if os.path.isdir(folder_path):
+        for file_name in os.listdir(folder_path):
+            if file_name.endswith((".xlsx", ".xls")):
+                file_path = os.path.join(folder_path, file_name)
+
+                # Read the file and process it with a global offset
+                library_id = library_folder  # Use folder name as LibraryID
+                spark_df = process_excel_with_local_roworder(file_path, library_id, file_index, cumulative_offset)
+
+                # Update cumulative offset for the next file
+                cumulative_offset += spark_df.count()
+
+                # Collect the DataFrame
+                all_spark_dfs.append(spark_df)
+
+# Combine all DataFrames
+final_spark_df = all_spark_dfs[0]
+for df in all_spark_dfs[1:]:
+    final_spark_df = final_spark_df.union(df)
+
+# Sort by RowOrder to preserve the global order
+final_spark_df = final_spark_df.orderBy("RowOrder")
+
+# Write the final DataFrame to Hive
+final_spark_df.write.mode("overwrite").saveAsTable("library_table")
+
+print("Data successfully written to Hive table 'library_table'.")
