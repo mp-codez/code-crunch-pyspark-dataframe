@@ -567,3 +567,106 @@ final_spark_df = final_spark_df.orderBy("RowOrder")
 final_spark_df.write.mode("overwrite").saveAsTable("library_table")
 
 print("Data successfully written to Hive table 'library_table'.")
+
+
+
+==========÷=======
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import boto3
+from botocore.exceptions import ClientError
+from typing import Any, Optional, List
+import io
+
+app = FastAPI()
+
+# Set up the Boto3 client for Ozone (Replace with actual credentials)
+ozone_client = boto3.client(
+    's3',
+    endpoint_url="https://your-ozone-endpoint.com",  # Ozone Storage endpoint
+    aws_access_key_id="your-access-key",
+    aws_secret_access_key="your-secret-key"
+)
+
+### ✅ 1. Common Response Model
+class BaseResponse(BaseModel):
+    status: str
+    data: Optional[Any] = None
+    error: Optional[str] = None
+
+### ✅ 2. Request Model for Creating Buckets
+class BucketRequest(BaseModel):
+    bucket_name: str
+
+### ✅ 3. Health Check API
+@app.get("/health-check", response_model=BaseResponse)
+async def health_check():
+    try:
+        response = ozone_client.list_buckets()  # Checking if connection works
+        return BaseResponse(status="success", data={"message": "Ozone connection is healthy!"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+### ✅ 4. Create Bucket API
+@app.post("/create-bucket", response_model=BaseResponse)
+async def create_bucket(request: BucketRequest):
+    bucket_name = request.bucket_name
+    try:
+        ozone_client.create_bucket(Bucket=bucket_name)
+        bucket_info = {
+            "name": bucket_name,
+            "location": f"https://your-ozone-endpoint.com/{bucket_name}"
+        }
+        return BaseResponse(status="success", data=bucket_info)
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+### ✅ 5. List Buckets API
+@app.get("/list-buckets", response_model=BaseResponse)
+async def list_buckets():
+    try:
+        response = ozone_client.list_buckets()
+        bucket_names = [bucket['Name'] for bucket in response.get('Buckets', [])]
+        return BaseResponse(status="success", data={"buckets": bucket_names})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+### ✅ 6. Get Bucket Info API
+@app.get("/bucket-info", response_model=BaseResponse)
+async def get_bucket_info(bucket_name: str):
+    try:
+        response = ozone_client.head_bucket(Bucket=bucket_name)  # Checking if bucket exists
+        bucket_info = {
+            "name": bucket_name,
+            "location": f"https://your-ozone-endpoint.com/{bucket_name}",
+            "exists": True
+        }
+        return BaseResponse(status="success", data=bucket_info)
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+### ✅ 7. List Files API
+@app.get("/list-files", response_model=BaseResponse)
+async def list_files(bucket_name: str):
+    try:
+        response = ozone_client.list_objects_v2(Bucket=bucket_name)
+        if 'Contents' not in response:
+            return BaseResponse(status="success", data={"files": []})
+
+        file_names = [obj['Key'] for obj in response['Contents']]
+        return BaseResponse(status="success", data={"files": file_names})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+### ✅ 8. Download File API
+@app.get("/download-file")
+async def download_file(bucket_name: str, file_name: str):
+    try:
+        response = ozone_client.get_object(Bucket=bucket_name, Key=file_name)
+        file_content = response['Body'].read()
+        return StreamingResponse(io.BytesIO(file_content), media_type="application/octet-stream", headers={
+            'Content-Disposition': f'attachment; filename="{file_name}"'
+        })
+    except ClientError as e:
+        return HTTPException(status_code=400, detail=f"Error downloading file {file_name}: {e}")
