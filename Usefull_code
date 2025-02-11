@@ -670,3 +670,28 @@ async def download_file(bucket_name: str, file_name: str):
         })
     except ClientError as e:
         return HTTPException(status_code=400, detail=f"Error downloading file {file_name}: {e}")
+
+
+=================
+from fastapi import Query
+
+@app.get("/file-info", response_model=BaseResponse)
+async def get_file_info(
+    bucket_name: str = Query(..., description="Bucket name"),
+    file_name: str = Query(..., description="File name")
+):
+    try:
+        # Get file metadata from Ozone
+        response = ozone_client.head_object(Bucket=bucket_name, Key=file_name)
+
+        file_info = {
+            "file": file_name,
+            "size": response.get("ContentLength", 0),
+            "date_modified": response.get("LastModified").strftime("%Y-%m-%d %H:%M:%S") if "LastModified" in response else None,
+            "type": response.get("ContentType", "unknown"),
+            "status": "exists"
+        }
+
+        return BaseResponse(status="success", data=file_info)
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
