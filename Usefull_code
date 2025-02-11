@@ -751,3 +751,32 @@ async def delete_bucket(bucket_name: str = Query(..., description="Bucket to del
         return BaseResponse(status="failure", error=str(e))
 
 ===========
+
+@app.post("/rename-bucket", response_model=BaseResponse)
+async def rename_bucket(
+    old_bucket_name: str,
+    new_bucket_name: str
+):
+    try:
+        # Create a new bucket
+        ozone_client.create_bucket(Bucket=new_bucket_name)
+
+        # List all files in the old bucket
+        response = ozone_client.list_objects_v2(Bucket=old_bucket_name)
+        if "Contents" in response:
+            for obj in response["Contents"]:
+                file_key = obj["Key"]
+
+                # Copy each file to the new bucket
+                copy_source = {"Bucket": old_bucket_name, "Key": file_key}
+                ozone_client.copy_object(Bucket=new_bucket_name, CopySource=copy_source, Key=file_key)
+
+                # Delete file from old bucket
+                ozone_client.delete_object(Bucket=old_bucket_name, Key=file_key)
+
+        # Delete old bucket (only if it's empty)
+        ozone_client.delete_bucket(Bucket=old_bucket_name)
+
+        return BaseResponse(status="success", data={"message": f"Bucket renamed from {old_bucket_name} to {new_bucket_name}"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
