@@ -780,3 +780,78 @@ async def rename_bucket(
         return BaseResponse(status="success", data={"message": f"Bucket renamed from {old_bucket_name} to {new_bucket_name}"})
     except ClientError as e:
         return BaseResponse(status="failure", error=str(e))
+
+
+========================
+from fastapi import UploadFile, HTTPException
+import io
+
+@app.post("/fast-append-file", response_model=BaseResponse)
+async def fast_append_file(
+    bucket_name: str,
+    file_name: str,
+    file: UploadFile
+):
+    try:
+        # Step 1: Check if the file already exists
+        try:
+            existing_object = ozone_client.get_object(Bucket=bucket_name, Key=file_name)
+            existing_stream = existing_object["Body"]
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                existing_stream = io.BytesIO()  # Treat as a new file
+            else:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # Step 2: Open a streaming buffer
+        buffer = io.BytesIO()
+
+        # Step 3: Copy existing content (if any) into buffer without loading into memory
+        buffer.write(existing_stream.read())
+
+        # Step 4: Append new content
+        buffer.write(file.file.read())
+
+        # Step 5: Upload back to Ozone
+        buffer.seek(0)  # Reset cursor
+        ozone_client.put_object(Bucket=bucket_name, Key=file_name, Body=buffer)
+
+        return BaseResponse(status="success", data={"message": f"Data appended to {file_name}"})
+
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+
+================================
+from fastapi import UploadFile
+
+@app.post("/append-file", response_model=BaseResponse)
+async def append_file(
+    bucket_name: str,
+    file_name: str,
+    file: UploadFile
+):
+    try:
+        # Read existing file content
+        try:
+            existing_object = ozone_client.get_object(Bucket=bucket_name, Key=file_name)
+            existing_data = existing_object["Body"].read()
+        except ClientError as e:
+            # If file doesn't exist, treat it as new
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                existing_data = b""
+            else:
+                return BaseResponse(status="failure", error=str(e))
+
+        # Read new content
+        new_data = file.file.read()
+
+        # Append new content to existing data
+        combined_data = existing_data + new_data
+
+        # Write the updated file back to Ozone
+        ozone_client.put_object(Bucket=bucket_name, Key=file_name, Body=combined_data)
+
+        return BaseResponse(status="success", data={"message": f"Data appended to {file_name}"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
