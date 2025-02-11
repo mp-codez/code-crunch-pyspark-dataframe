@@ -695,3 +695,59 @@ async def get_file_info(
         return BaseResponse(status="success", data=file_info)
     except ClientError as e:
         return BaseResponse(status="failure", error=str(e))
+
+
+
+=========/============
+@app.post("/rename-file", response_model=BaseResponse)
+async def rename_file(
+    bucket_name: str,
+    old_file_name: str,
+    new_file_name: str
+):
+    try:
+        # Copy the file to new location
+        copy_source = {"Bucket": bucket_name, "Key": old_file_name}
+        ozone_client.copy_object(
+            Bucket=bucket_name,
+            CopySource=copy_source,
+            Key=new_file_name
+        )
+
+        # Delete the old file
+        ozone_client.delete_object(Bucket=bucket_name, Key=old_file_name)
+
+        return BaseResponse(status="success", data={"message": f"File renamed from {old_file_name} to {new_file_name}"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+
+==============
+@app.delete("/delete-file", response_model=BaseResponse)
+async def delete_file(
+    bucket_name: str = Query(..., description="Bucket name"),
+    file_name: str = Query(..., description="File to delete")
+):
+    try:
+        ozone_client.delete_object(Bucket=bucket_name, Key=file_name)
+        return BaseResponse(status="success", data={"message": f"File {file_name} deleted successfully"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+============
+
+@app.delete("/delete-bucket", response_model=BaseResponse)
+async def delete_bucket(bucket_name: str = Query(..., description="Bucket to delete")):
+    try:
+        # Check if bucket is empty
+        response = ozone_client.list_objects_v2(Bucket=bucket_name)
+        if "Contents" in response:
+            return BaseResponse(status="failure", error="Bucket is not empty. Delete all files first.")
+
+        # Delete the bucket
+        ozone_client.delete_bucket(Bucket=bucket_name)
+        return BaseResponse(status="success", data={"message": f"Bucket {bucket_name} deleted successfully"})
+    except ClientError as e:
+        return BaseResponse(status="failure", error=str(e))
+
+===========
