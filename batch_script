@@ -1,0 +1,99 @@
+#Batch Script to Mount NFS drive:::
+1#
+@echo off
+setlocal enabledelayedexpansion
+
+:: Define variables
+set NFS_SERVER=d0124hostadroint.adrointster.com
+set NFS_SHARE=/data/10/nfs/drive_location
+set MOUNT_POINT=P:
+set NETWORK_CHECK_IP=your_company_gateway_ip   :: Replace with an IP inside your organization’s network
+
+:: Check if connected to organization network
+ping -n 1 !NETWORK_CHECK_IP! >nul
+if %errorlevel% neq 0 (
+    echo Not connected to organization network. Exiting...
+    exit /b
+)
+
+:: Enable NFS Client (First-time setup, requires admin rights)
+dism /online /enable-feature /featurename:ServicesForNFS-Client /NoRestart
+
+:: Set anonymous UID/GID for write permissions
+reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ClientForNFS\CurrentVersion\Default" /v AnonymousUid /t REG_DWORD /d 0x3e8 /f
+reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ClientForNFS\CurrentVersion\Default" /v AnonymousGid /t REG_DWORD /d 0x3e8 /f
+
+:: Restart NFS Client Service
+sc stop NfsClnt
+sc start NfsClnt
+
+:: Wait for service to start
+timeout /t 5 /nobreak >nul
+
+:: Mount NFS Share
+mount -o nolock,rsize=1024,wsize=1024,mtype=hard,timeout=60 %NFS_SERVER%:%NFS_SHARE% %MOUNT_POINT%
+
+if %errorlevel% equ 0 (
+    echo Successfully mounted NFS at %MOUNT_POINT%
+) else (
+    echo Failed to mount NFS. Check network connection or permissions.
+)
+
+exit /b
+
+2::
+@echo off
+setlocal
+
+REM Log file location
+set LOG_FILE=C:\NFS_Mount_Log.txt
+echo [%date% %time%] Script started. >> %LOG_FILE%
+
+REM Step 1: Check if connected to the organization network
+echo Checking network connection... >> %LOG_FILE%
+ping -n 1 your_organization_domain.com >nul
+if %ERRORLEVEL% neq 0 (
+    echo [%date% %time%] Not connected to the organization network. Exiting. >> %LOG_FILE%
+    exit /b 0
+)
+echo [%date% %time%] Connected to the organization network. Proceeding... >> %LOG_FILE%
+
+REM Step 2: Enable Services for NFS (if not already enabled)
+echo Enabling Services for NFS... >> %LOG_FILE%
+dism /online /enable-feature /featurename:ServicesForNFS-ClientOnly /all /norestart
+if %ERRORLEVEL% neq 0 (
+    echo [%date% %time%] Failed to enable Services for NFS. >> %LOG_FILE%
+    exit /b 1
+)
+
+REM Step 3: Modify the registry to grant write permissions for the anonymous user
+echo Modifying registry to grant write permissions... >> %LOG_FILE%
+reg add "HKLM\SOFTWARE\Microsoft\ClientForNFS\CurrentVersion\Default" /v AnonymousUid /t REG_DWORD /d 0 /f
+reg add "HKLM\SOFTWARE\Microsoft\ClientForNFS\CurrentVersion\Default" /v AnonymousGid /t REG_DWORD /d 0 /f
+if %ERRORLEVEL% neq 0 (
+    echo [%date% %time%] Failed to modify the registry. >> %LOG_FILE%
+    exit /b 1
+)
+
+REM Step 4: Restart the NFS client
+echo Restarting the NFS client... >> %LOG_FILE%
+sc stop nfsclnt
+sc start nfsclnt
+if %ERRORLEVEL% neq 0 (
+    echo [%date% %time%] Failed to restart the NFS client. >> %LOG_FILE%
+    exit /b 1
+)
+
+REM Step 5: Mount the NFS share
+echo Mounting the NFS share... >> %LOG_FILE%
+set NFS_SERVER=d0124hostadroint.adrointster.com:/data/10/nfs/drive_location
+set DRIVE_LETTER=P:
+
+mount -o nolock,rsize=1024,wsize=1024,mtype=hard,timeout=60 %NFS_SERVER% %DRIVE_LETTER%
+if %ERRORLEVEL% neq 0 (
+    echo [%date% %time%] Failed to mount the NFS share. >> %LOG_FILE%
+    exit /b 1
+)
+
+echo [%date% %time%] NFS share mounted successfully on %DRIVE_LETTER%. >> %LOG_FILE%
+exit /b 0
