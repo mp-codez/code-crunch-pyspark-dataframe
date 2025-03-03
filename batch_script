@@ -170,3 +170,16 @@ if %ERRORLEVEL% neq 0 (
 
 echo [%date% %time%] NFS share mounted successfully on %DRIVE_LETTER%. >> %LOG_FILE%
 exit /b 0
+
+
+===========
+# Define the API endpoint and username
+$apiUrl = "https://api.yourorganization.com/getUserDetails"
+$username = $env:USERNAME
+
+# Call the API
+$response = Invoke-RestMethod -Uri "$apiUrl?username=$username" -Method Get
+
+# Output the AnonymousUid and AnonymousGid
+Write-Output "AnonymousUid=$($response.AnonymousUid)"
+Write-Output "AnonymousGid=$($response.AnonymousGid)"
