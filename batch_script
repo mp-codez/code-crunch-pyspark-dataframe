@@ -183,3 +183,84 @@ $response = Invoke-RestMethod -Uri "$apiUrl?username=$username" -Method Get
 # Output the AnonymousUid and AnonymousGid
 Write-Output "AnonymousUid=$($response.AnonymousUid)"
 Write-Output "AnonymousGid=$($response.AnonymousGid)"
+
+
+
+
+===============
+@echo off
+SETLOCAL EnableDelayedExpansion
+
+:: Log file
+set "logfile=api_script.log"
+
+:: Clear the log file
+echo Script started on %date% %time% > %logfile%
+echo. >> %logfile%
+
+:: API endpoint
+set "api_url=https://jsonplaceholder.typicode.com/posts/1"
+echo Calling API: %api_url% >> %logfile%
+
+:: Temporary file to store API response
+set "temp_file=response.tmp"
+
+:: Use curl to call the API and save response
+curl -s %api_url% > %temp_file%
+
+:: Log API response
+echo API Response: >> %logfile%
+type %temp_file% >> %logfile%
+echo. >> %logfile%
+
+:: Extract userId and id
+set "id1="
+set "id2="
+
+for /f "tokens=2 delims=:, " %%a in ('type %temp_file% ^| findstr /i "\"userId\""') do (
+    set "id1=%%a"
+)
+for /f "tokens=2 delims=:, " %%b in ('type %temp_file% ^| findstr /i "\"id\""') do (
+    set "id2=%%b"
+)
+
+:: Remove unwanted characters
+set "id1=!id1:"=%!"
+set "id1=!id1: =!"
+set "id2=!id2:"=%!"
+set "id2=!id2: =!"
+
+:: Debug logging
+echo DEBUG: Extracted userId (ID 1): "!id1!" >> %logfile%
+echo DEBUG: Extracted id (ID 2): "!id2!" >> %logfile%
+
+:: If extraction failed, log error
+if "!id1!"=="" echo ERROR: userId not extracted! >> %logfile%
+if "!id2!"=="" echo ERROR: id not extracted! >> %logfile%
+
+:: Force log flush
+timeout /t 1 >nul
+
+:: Convert to numbers
+set /a id1_num=!id1! 2>nul
+set /a id2_num=!id2! 2>nul
+
+:: Debug conversion
+echo DEBUG: Converted userId: "!id1_num!" >> %logfile%
+echo DEBUG: Converted id: "!id2_num!" >> %logfile%
+
+:: Perform sum operation
+set /a result=!id1_num! + !id2_num!
+echo Sum of IDs: !result! >> %logfile%
+
+:: Ensure script reaches end
+echo DEBUG: Script reached the end. >> %logfile%
+
+:: Cleanup
+del %temp_file%
+
+:: Display log file
+type %logfile%
+pause
+
+ENDLOCAL
