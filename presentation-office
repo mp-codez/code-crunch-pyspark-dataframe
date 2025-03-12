@@ -1,4 +1,4 @@
-2Apologies for the confusion earlier! I now understand what you are asking for:
+12Apologies for the confusion earlier! I now understand what you are asking for:
 
 1. The first response that only explains the concept without mentioning any specific tools (like Kafka, NiFi, HDFS, or Spark).
 
@@ -234,5 +234,158 @@ Example: Using Tableau or Superset to visualize customer trends.
 Final Thought
 
 The Big Data Team ensures that raw data is collected, stored, processed, analyzed, and secured effectively, enabling organizations to make data-driven decisions. Let me know if you need more details on any of these areas!
+=====================================
+
+Got it! In this case, Bronze (Raw), Silver (Processed), and Gold (Aggregated) tables will be stored in Hive, and only the Final Table will be ingested into Apache Iceberg.
+
+Here's the updated step-by-step process considering this change:
+
+
+---
+
+🔹 Step 1: Business Requirement Gathering
+
+✅ Stakeholders Involved: Business Team, Data Science Team, Dashboard Team, Data Engineering Team.
+✅ Output: Draft Schema for the final table based on business needs.
+
+Example schema:
+| customer_id | total_spent | total_orders | region | last_purchase_date | churn_risk_score |
+
+
+---
+
+🔹 Step 2: Source Data Identification & Exploration
+
+✅ Identify source systems: SAP HANA, MySQL, APIs, etc.
+✅ List of tables: Orders, Customers, Transactions.
+✅ Output: Data quality report.
+
+
+---
+
+🔹 Step 3: Data Ingestion (Bronze Layer - Raw Data in Hive)
+
+✅ Ingest raw data into Hive (instead of HDFS directly).
+✅ Storage Location:
+
+hive.default.bronze_orders  
+hive.default.bronze_customers
+
+✅ Example Hive Table (Bronze Layer - Raw Table in Hive):
+
+CREATE TABLE hive.default.bronze_orders (
+    order_id STRING,
+    customer_id STRING,
+    amount DOUBLE,
+    purchase_date STRING
+) STORED AS PARQUET;
+
+✅ Output: Raw data stored in Hive Bronze Tables.
+
+
+---
+
+🔹 Step 4: Data Cleaning & Standardization (Silver Layer - Processed Data in Hive)
+
+✅ Process raw data using Spark & save cleaned data in Hive Silver Tables.
+
+✅ Example Hive Table (Silver Layer - Processed Table in Hive):
+
+CREATE TABLE hive.default.silver_sales AS  
+SELECT DISTINCT o.order_id, o.customer_id, o.amount, c.region, o.purchase_date  
+FROM hive.default.bronze_orders o  
+JOIN hive.default.bronze_customers c ON o.customer_id = c.customer_id;
+
+✅ Storage Location:
+
+hive.default.silver_sales
+
+✅ Output: Cleaned & structured data in Hive Silver Tables.
+
+
+---
+
+🔹 Step 5: Data Transformation (Gold Layer - Business Ready Data in Hive)
+
+✅ Transform data, apply aggregations & store in Hive Gold Tables.
+
+✅ Example Hive Table (Gold Layer - Aggregated Data in Hive):
+
+CREATE TABLE hive.default.gold_sales AS  
+SELECT  
+    customer_id,  
+    SUM(amount) AS total_spent,  
+    COUNT(order_id) AS total_orders,  
+    region,  
+    MAX(purchase_date) AS last_purchase_date  
+FROM hive.default.silver_sales  
+GROUP BY customer_id, region;
+
+✅ Storage Location:
+
+hive.default.gold_sales
+
+✅ Output: Business-ready data stored in Hive Gold Tables.
+
+
+---
+
+🔹 Step 6: Storing Final Table in Iceberg Warehouse
+
+✅ Only Final Table will be stored in Apache Iceberg for analytics.
+
+✅ Create Apache Iceberg Final Table:
+
+CREATE TABLE iceberg_catalog.final.sales (
+    customer_id STRING,
+    total_spent DOUBLE,
+    total_orders INT,
+    region STRING,
+    last_purchase_date DATE
+) USING ICEBERG;
+
+✅ Ingest Data into Iceberg from Hive Gold Table:
+
+INSERT INTO iceberg_catalog.final.sales  
+SELECT * FROM hive.default.gold_sales;
+
+✅ Storage Location:
+
+iceberg_catalog.final.sales
+
+✅ Output: Final optimized Iceberg table for querying.
+
+
+---
+
+🔹 Step 7: Consumption (BI, ML, Dashboards, Reporting)
+
+✅ BI Team → Connects to Iceberg Table.
+✅ Data Science Team → Uses it for ML Models.
+
+✅ Example Query for BI Team:
+
+SELECT * FROM iceberg_catalog.final.sales WHERE region = 'Europe';
+
+✅ Example Query for ML Model:
+
+df = spark.read.format("iceberg").load("iceberg_catalog.final.sales")
+
+✅ Output: Data available for dashboards, reports, and ML models.
+
+
+---
+
+🔹 Final Updated Process Summary
+
+1️⃣ Business/Data Science Teams define the final table schema.
+2️⃣ Data Engineering Team identifies source data.
+3️⃣ Bronze Layer (Raw Data) → Ingest into Hive.
+4️⃣ Silver Layer (Processed Data) → Clean & store in Hive.
+5️⃣ Gold Layer (Business Data) → Transform & save in Hive.
+6️⃣ Final Table Storage → Move to Apache Iceberg for analytics.
+7️⃣ Consumption → Used in BI dashboards, reports, ML models.
+
+Now, your data is structured, governed, and optimized 🚀.
 
 
