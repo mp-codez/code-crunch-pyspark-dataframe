@@ -1,0 +1,104 @@
+Here’s a clean and structured way to document your pipeline proposal. You can use this for a presentation, email, or project plan.
+
+
+---
+
+Focus Build Data Pipeline Proposal
+
+
+---
+
+1. Objectives
+
+Automate Data Ingestion: Fetch data from Focus Build API every hour.
+
+Store for Auditing & Processing: Save the raw data into HDFS for traceability and batch processing.
+
+Transform & Load: Clean/transform data and load it into a SQL system for business users.
+
+Email Alert System: Automatically send an email if any row contains a status = 'Failed'.
+
+Scalable & Maintainable: Design a reusable and scalable data pipeline using standard big data tools.
+
+
+
+---
+
+2. Architecture & Time Frame
+
+High-Level Architecture
+
+Focus Build API
+     |
+     v
+[API Connector - Python/NiFi]
+     |
+     v
+[Raw Zone - HDFS]
+     |
+     v
+[Transformation - PySpark]
+     |
+     v
+[SQL System - MySQL/PostgreSQL]
+     |
+     v
+[Status Check & Email Notification]
+
+Pipeline Frequency
+
+Runs every hour via Apache Oozie or Airflow, or OS-level cron.
+
+
+Time Frame
+
+Total Estimated Time: 3–4 weeks
+
+
+---
+
+3. Requirements from Other Teams
+
+From API/Focus Build Team
+
+API documentation and authentication mechanism
+
+Access token or credentials
+
+API endpoint details (pagination, filters, etc.)
+
+
+From Infrastructure/DevOps Team
+
+Access to HDFS write path
+
+Access to SQL system (write permissions, schema)
+
+SMTP server details for sending emails
+
+Scheduling support (Airflow/Oozie/cron permissions)
+
+
+From Security/Compliance Team
+
+Review of data access and authentication methods
+
+Approval for storage of sensitive data in HDFS and SQL
+
+Encryption/tokenization requirements (if any)
+
+
+From SQL Team (if separate)
+
+Target table creation or permission to create
+
+Indexing strategy (if needed)
+
+SLA for data availability
+
+
+
+---
+
+Would you like this formatted as a PowerPoint or a Word document as well? Or should I generate a one-pager PDF/Markdown you can share directly?
+
