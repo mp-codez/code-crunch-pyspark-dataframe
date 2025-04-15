@@ -25,3 +25,25 @@ Kind regards,
 
 Let me know if you want it more formal or more casual.
 
+
+
+==============
+
+Your justification is mostly clear, but you can make it a bit more formal and structured for communication with the IT/IM team. Here's a refined version:
+
+
+---
+
+Subject: Request for Service Account Creation for Lab Link Project
+
+Justification:
+
+We have implemented a batch script as part of the Lab Link project to mount an NFS drive on the required scientists' Windows machines. Running this script requires administrative privileges, which necessitates the use of a service account. Additionally, in order to troubleshoot and debug the script effectively, we need to be able to run it locally on our machines with the same level of access.
+
+Therefore, we request the creation of a service account with appropriate administrative rights to support the deployment and maintenance of this script.
+
+
+---
+
+Let me know if you want to add specific details like the script location, systems affected, or the permissions required.
+
