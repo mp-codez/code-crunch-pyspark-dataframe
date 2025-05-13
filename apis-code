@@ -88,3 +88,27 @@ def get_list_of_bucket(_: None = Depends(validate_token)):
         buckets = [{"bucketName": row[0], "creationDate": row[1]} for row in rows]
 
     return {"message": "Buckets retrieved successfully", "buckets": buckets}
+
+
+========
+from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi.security import APIKeyHeader
+from typing import Optional
+
+app = FastAPI()
+
+API_KEY_NAME = "Authorization"
+API_KEY = "YOUR_SECRET_TOKEN"  # Replace with your real token
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def validate_token(api_key: Optional[str] = Depends(api_key_header)):
+    if api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+
+@app.post("/create_new_bucket", dependencies=[Depends(validate_token)])
+async def create_bucket():
+    return {"message": "Bucket created"}
+
+@app.post("/get_list_of_bucket", dependencies=[Depends(validate_token)])
+async def get_buckets():
+    return {"buckets": []}
