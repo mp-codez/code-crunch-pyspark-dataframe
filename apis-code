@@ -1,0 +1,90 @@
+from fastapi import FastAPI, HTTPException, Header, Depends
+from pydantic import BaseModel
+from datetime import datetime
+import boto3
+import sqlite3
+
+# Constants
+S3_ENDPOINT = "http://<s3-gateway-host>:9878"
+DEFAULT_REGION = "us-east-1"
+SQLITE_DB = "bucket_access.db"
+DEFAULT_TEAM_ID = "team_001"
+VALID_TOKEN = "supersecrettoken123"  # You can later load from env or DB
+
+app = FastAPI()
+
+# Input Model
+class BucketCreateRequest(BaseModel):
+    bucket_name: str
+
+# DB Setup
+def init_db():
+    with sqlite3.connect(SQLITE_DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bucket_access (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id TEXT NOT NULL,
+                bucket_name TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
+# S3 Client
+def get_s3_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=S3_ENDPOINT,
+        region_name=DEFAULT_REGION
+    )
+
+# Token Auth Dependency
+def validate_token(authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+    token = authorization.split(" ")[1]
+    if token != VALID_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid or expired token")
+
+# POST /create_new_bucket
+@app.post("/create_new_bucket")
+def create_new_bucket(request: BucketCreateRequest, _: None = Depends(validate_token)):
+    init_db()
+    s3 = get_s3_client()
+
+    # Check if bucket already exists
+    with sqlite3.connect(SQLITE_DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM bucket_access WHERE bucket_name = ?", (request.bucket_name,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Bucket already exists")
+
+    # Create bucket in S3
+    try:
+        s3.create_bucket(Bucket=request.bucket_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating bucket in S3: {e}")
+
+    # Insert into DB
+    with sqlite3.connect(SQLITE_DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO bucket_access (team_id, bucket_name, created_at) VALUES (?, ?, ?)",
+            (DEFAULT_TEAM_ID, request.bucket_name, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+
+    return {"message": f"Bucket {request.bucket_name} created successfully"}
+
+# POST /get_list_of_bucket
+@app.post("/get_list_of_bucket")
+def get_list_of_bucket(_: None = Depends(validate_token)):
+    init_db()
+    with sqlite3.connect(SQLITE_DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT bucket_name, created_at FROM bucket_access")
+        rows = cursor.fetchall()
+        buckets = [{"bucketName": row[0], "creationDate": row[1]} for row in rows]
+
+    return {"message": "Buckets retrieved successfully", "buckets": buckets}
