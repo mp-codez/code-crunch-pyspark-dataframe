@@ -192,3 +192,65 @@ def rename_bucket(request: RenameBucketRequest):
         conn.close()
 
     return {"message": f"Bucket {request.old_bucket_name} renamed to {request.new_bucket_name}"}
+
+
+================
+from fastapi import FastAPI, File, UploadFile, Form, Depends, Header, HTTPException
+from pydantic import BaseModel
+import boto3
+import sqlite3
+import io
+
+app = FastAPI()
+
+# Constants
+OZONE_S3_ENDPOINT = "http://<s3-gateway-host>:9878"  # Replace with your S3 URL
+ACCESS_KEY = "your-access-key"
+SECRET_KEY = "your-secret-key"
+API_KEY = "YOUR_SECRET_TOKEN"
+OZONE_VOLUME = "s3v"
+
+# Boto3 client
+s3_client = boto3.client(
+    's3',
+    endpoint_url=OZONE_S3_ENDPOINT,
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
+)
+
+# Token validation
+def validate_token(authorization: str = Header(...)):
+    if authorization != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/upload_file", dependencies=[Depends(validate_token)])
+async def upload_file(
+    bucket_name: str = Form(...),
+    file: UploadFile = File(...)
+):
+    try:
+        # Upload the file
+        file_bytes = await file.read()
+        response = s3_client.put_object(
+            Bucket=bucket_name,
+            Key=file.filename,
+            Body=io.BytesIO(file_bytes)
+        )
+
+        return {
+            "message": f"File {file.filename} uploaded successfully to bucket {bucket_name}",
+            "response": {
+                "ResponseMetadata": {
+                    "RequestId": response["ResponseMetadata"].get("RequestId"),
+                    "HostId": response["ResponseMetadata"].get("HostId", ""),
+                    "HttpStatusCode": response["ResponseMetadata"].get("HTTPStatusCode"),
+                    "HttpHeaders": response["ResponseMetadata"].get("HTTPHeaders", {}),
+                    "RetryAttempts": response["ResponseMetadata"].get("RetryAttempts", 0)
+                },
+                "ETag": response.get("ETag", "")
+            },
+            "filename": file.filename
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
