@@ -254,3 +254,79 @@ async def upload_file(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
+
+========/============
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+app = FastAPI()
+
+def validate_token(secret_access_key: str):
+    return secret_access_key
+
+@app.post("/upload_large_file_with_metadata")
+async def upload_file(
+    bucket_name: str = Form(...),
+    file_name: str = Form(...),
+    file: UploadFile = File(...),
+    secret_access_key: str = Depends(validate_token)
+):
+    try:
+        s3_client = boto3.client(
+            's3',
+            endpoint_url='http://<your-ozone-endpoint>',
+            aws_access_key_id='your-access-key',
+            aws_secret_access_key=secret_access_key
+        )
+
+        # Step 1: Initiate multipart upload
+        mpu = s3_client.create_multipart_upload(Bucket=bucket_name, Key=file_name)
+        upload_id = mpu["UploadId"]
+
+        part_size = 50 * 1024 * 1024  # 50 MB
+        parts = []
+        part_number = 1
+
+        while True:
+            chunk = await file.read(part_size)
+            if not chunk:
+                break
+
+            response = s3_client.upload_part(
+                Bucket=bucket_name,
+                Key=file_name,
+                PartNumber=part_number,
+                UploadId=upload_id,
+                Body=chunk
+            )
+
+            parts.append({
+                "PartNumber": part_number,
+                "ETag": response["ETag"]
+            })
+            part_number += 1
+
+        # Step 3: Complete multipart upload
+        result = s3_client.complete_multipart_upload(
+            Bucket=bucket_name,
+            Key=file_name,
+            UploadId=upload_id,
+            MultipartUpload={"Parts": parts}
+        )
+
+        # Return full metadata response
+        return {
+            "message": f"File '{file_name}' uploaded successfully to bucket '{bucket_name}'",
+            "filename": file_name,
+            "response": {
+                "ETag": result.get("ETag"),
+                "Location": result.get("Location"),
+                "ResponseMetadata": result.get("ResponseMetadata", {})
+            }
+        }
+
+    except (BotoCoreError, ClientError) as e:
+        raise HTTPException(status_code=500, detail=str(e))
