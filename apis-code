@@ -330,3 +330,50 @@ async def upload_file(
 
     except (BotoCoreError, ClientError) as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+======================
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import boto3
+import sqlite3
+
+app = FastAPI()
+
+class BucketListRequest(BaseModel):
+    team_id: str
+    secret_access_key: str
+
+@app.post("/list_buckets")
+async def list_buckets(payload: BucketListRequest):
+    try:
+        # Connect to SQLite
+        conn = sqlite3.connect("buckets.db")
+        cursor = conn.cursor()
+
+        # Get buckets for the team_id
+        cursor.execute("SELECT bucket_name, creation_date FROM bucket_access WHERE team_id = ?", (payload.team_id,))
+        records = cursor.fetchall()
+
+        if not records:
+            return {"message": "No buckets found for this team", "buckets": []}
+
+        # Fetch bucket list from Ozone via boto3
+        s3_client = boto3.client(
+            's3',
+            endpoint_url='http://<your-ozone-endpoint>',
+            aws_access_key_id='your-access-key',
+            aws_secret_access_key=payload.secret_access_key
+        )
+
+        existing_buckets = {b['Name'] for b in s3_client.list_buckets().get('Buckets', [])}
+
+        filtered = [
+            {"bucketName": name, "creationDate": date}
+            for (name, date) in records if name in existing_buckets
+        ]
+
+        return {"message": "Buckets retrieved successfully", "buckets": filtered}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
