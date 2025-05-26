@@ -407,4 +407,270 @@ Now, your data is structured, governed, and optimized 🚀.
 This structured approach ensures efficient data management, governance, and high-quality analytics 🚀.
 
 
+cml======================================
+
+Cloudera Machine Learning (CML) 4-Day Training Plan - Detailed Theory & Practical Demos
+
+
+---
+
+Day 1: Introduction & Environment Setup
+
+Theory:
+
+What is Cloudera Machine Learning (CML)?
+
+CML is a secure, scalable, cloud-native machine learning and data engineering platform integrated into Cloudera Data Platform (CDP).
+
+It provides a unified environment for data scientists and engineers to write code, process data, visualize results, and deploy data pipelines and applications.
+
+Supports multiple languages: Python, R, Scala, SQL.
+
+
+Why Use CML?
+
+Isolation via Kubernetes containers.
+
+Centralized governance, security, and auditing.
+
+Integration with Cloudera services: Hive, HDFS, Kudu, Impala, Spark.
+
+
+CML Architecture Overview:
+
+CML runs on Kubernetes with each session/job as an isolated container.
+
+Uses CDP authentication (LDAP/SAML/SSO) and Kerberos for secure data access.
+
+Access to HDFS, Hive, Kudu, Impala through Spark or direct connectors.
+
+
+Key Concepts:
+
+Projects: Workspaces to manage code, dependencies, and settings.
+
+Sessions: Interactive container sessions for code development.
+
+Jobs: Scheduled executions of scripts.
+
+Git Integration: For version control and collaboration.
+
+
+
+Practical Demo:
+
+Demo 1: Create a Project
+
+Go to CML UI → Create Project
+
+Options: From Local Files or Git URL (e.g., GitHub)
+
+
+Demo 2: Launch a Session
+
+Select Engine (e.g., Python 3.9, R)
+
+Define resource size (CPU, RAM, GPU if needed)
+
+
+Demo 3: Write and Run Basic Python Script
+
+print("Hello from Cloudera Machine Learning!")
+
+Save and run the script in the session.
+
+
+
+
+---
+
+Day 2: Data Access & Exploration
+
+Theory:
+
+Data Sources in Cloudera:
+
+Hive/Impala tables
+
+HDFS files
+
+Kudu tables
+
+
+Security via Kerberos Authentication:
+
+Required for accessing data securely from Hive/Kudu.
+
+Use keytab and principal in Spark configuration within CML.
+
+
+Working with Spark in CML:
+
+PySpark enables distributed data processing.
+
+SparkSession setup with Kerberos:
+
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("cml-secure-access") \
+    .config("spark.kerberos.keytab", "/path/user.keytab") \
+    .config("spark.kerberos.principal", "user@EXAMPLE.COM") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+
+
+Practical Demo:
+
+Demo 1: Read Data from Hive Table
+
+df = spark.sql("SELECT * FROM default.sales LIMIT 10")
+df.show()
+
+Demo 2: Data Profiling & Visualization
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+pdf = df.toPandas()
+print(pdf.describe())
+
+pdf['revenue'].hist(bins=20)
+plt.title('Revenue Distribution')
+plt.xlabel('Revenue')
+plt.ylabel('Frequency')
+plt.grid(True)
+plt.show()
+
+
+
+---
+
+Day 3: Data Engineering Workflows in CML
+
+Theory:
+
+ETL/ELT Pipelines in CML:
+
+Use PySpark for large-scale data transformation.
+
+Read from Hive/Kudu → transform → write back.
+
+
+Scheduling Jobs in CML:
+
+Define script-based jobs.
+
+Set execution time and frequency (e.g., daily, hourly).
+
+
+Writing Clean & Maintainable PySpark Code
+
+Modular code
+
+Logging and error handling
+
+
+
+Practical Demo:
+
+Demo 1: Data Cleaning with PySpark
+
+df_clean = df.dropna().withColumnRenamed("cust_id", "customer_id")
+df_clean.write.mode("overwrite").saveAsTable("default.cleaned_sales")
+
+Demo 2: Schedule a Job
+
+Navigate to project → Jobs → New Job
+
+Select script: clean_sales.py
+
+Set schedule: Daily at 7:00 AM
+
+
+
+
+---
+
+Day 4: Automation, Monitoring & Best Practices
+
+Theory:
+
+Automation:
+
+Create chains of jobs using dependencies
+
+Integrate with Apache Airflow (optional)
+
+
+Monitoring & Debugging:
+
+Use Logs tab in Jobs and Sessions
+
+Download logs for deeper analysis
+
+
+Git Integration:
+
+Push/pull code with GitHub or internal Git
+
+Use branches for different teams or experiments
+
+
+Best Practices in CML:
+
+Use environment files (requirements.txt) for dependencies
+
+Log output and errors
+
+Use .env or secrets manager for credentials
+
+Document your work using Markdown/Notebooks
+
+
+
+Practical Demo:
+
+Demo 1: Logging in Python Job
+
+import logging
+logging.basicConfig(level=logging.INFO, filename='etl.log')
+logging.info("ETL job started")
+
+# your transformation logic
+
+logging.info("ETL job completed")
+
+Demo 2: Commit Code to Git
+
+git init
+git add .
+git commit -m "Initial version of data ETL pipeline"
+git remote add origin https://github.com/yourrepo/cml-training.git
+git push -u origin master
+
+
+
+---
+
+Wrap-Up:
+
+Recap of Key CML Concepts and Hands-on Demos
+
+Q&A Session
+
+Tips for Continued Learning:
+
+Cloudera documentation
+
+CDP tutorials and sandbox
+
+Join Cloudera community forums
+
+
+
+Let me know if you'd like slides, exercise notebooks, or a real-world use case example for this training.
+
+
 
