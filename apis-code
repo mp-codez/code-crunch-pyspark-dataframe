@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Depends
+9from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 from datetime import datetime
 import boto3
@@ -435,3 +435,73 @@ def get_file_list(payload: BucketListRequest):
             raise HTTPException(status_code=500, detail=f"S3 Error: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Error: {e}")
+
+
+
+==================
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from datetime import datetime
+import boto3
+from botocore.exceptions import ClientError
+
+app = FastAPI()
+
+# Request Model
+class RenameFileRequest(BaseModel):
+    bucket_name: str
+    file_old_name: str
+    new_file_name: str
+    secret_access_key: str
+
+@app.post("/rename_file")
+def rename_file(payload: RenameFileRequest):
+    try:
+        # Initialize S3 client for Apache Ozone
+        s3_client = boto3.client(
+            's3',
+            endpoint_url='http://<your-ozone-s3-endpoint>',  # Replace with your endpoint
+            aws_access_key_id='your-access-key',
+            aws_secret_access_key=payload.secret_access_key,
+        )
+
+        # Copy the object
+        copy_source = {
+            'Bucket': payload.bucket_name,
+            'Key': payload.file_old_name
+        }
+
+        s3_client.copy_object(
+            Bucket=payload.bucket_name,
+            CopySource=copy_source,
+            Key=payload.new_file_name
+        )
+
+        # Delete the original object
+        s3_client.delete_object(
+            Bucket=payload.bucket_name,
+            Key=payload.file_old_name
+        )
+
+        # Get metadata of new file
+        head = s3_client.head_object(
+            Bucket=payload.bucket_name,
+            Key=payload.new_file_name
+        )
+
+        file_type = payload.new_file_name.split('.')[-1] if '.' in payload.new_file_name else 'unknown'
+
+        return {
+            "status": "File renamed successfully",
+            "file_info": {
+                "file": payload.new_file_name,
+                "size": head['ContentLength'],
+                "date_modified": head['LastModified'].isoformat(),
+                "type": file_type
+            }
+        }
+
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"S3 Client Error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected Error: {e}")
