@@ -505,3 +505,102 @@ def rename_file(payload: RenameFileRequest):
         raise HTTPException(status_code=500, detail=f"S3 Client Error: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected Error: {e}")
+
+
+========
+from fastapi import FastAPI, HTTPException
+import boto3
+from botocore.exceptions import ClientError
+from datetime import datetime
+
+# ---- configure your Ozone S3 gateway here ----
+s3 = boto3.client(
+    "s3",
+    endpoint_url="http://ozone-s3:9878",
+    aws_access_key_id="YOUR_KEY",
+    aws_secret_access_key="YOUR_SECRET",
+)
+BUCKET = "logs-bucket"
+KEY = "app.log"
+
+app = FastAPI()
+
+def _simple_put(bucket, key, body, content_type="text/plain; charset=utf-8"):
+    s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+
+def append_object(bucket: str, key: str, data: bytes):
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+        etag = head["ETag"].strip('"')
+        size = head["ContentLength"]
+        exists = True
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code")
+        if code in ("404", "NoSuchKey", "NotFound"):
+            exists = False
+        else:
+            raise
+
+    # If object doesn't exist, just create it
+    if not exists:
+        _simple_put(bucket, key, data)
+        return {"created": True, "bytes_appended": len(data)}
+
+    # Small existing object (<5MB): do your BytesIO-style overwrite
+    if size < 5 * 1024 * 1024:
+        # Download existing + append + overwrite
+        existing = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        _simple_put(bucket, key, existing + data)
+        return {"created": False, "bytes_appended": len(data), "mode": "overwrite(<5MB)"}
+
+    # Large existing object (≥5MB): MPU + server-side copy (true no-download "append")
+    mpu = s3.create_multipart_upload(Bucket=bucket, Key=key, ContentType="text/plain; charset=utf-8")
+    upload_id = mpu["UploadId"]
+    parts = []
+    try:
+        # Part 1 = existing object (server-side copy)
+        copy_resp = s3.upload_part_copy(
+            Bucket=bucket,
+            Key=key,
+            PartNumber=1,
+            UploadId=upload_id,
+            CopySource={"Bucket": bucket, "Key": key},
+            # Prevent lost update: only copy if ETag unchanged since HEAD
+            CopySourceIfMatch=etag
+        )
+        parts.append({"ETag": copy_resp["CopyPartResult"]["ETag"], "PartNumber": 1})
+
+        # Part 2 = your new data
+        up2 = s3.upload_part(
+            Bucket=bucket,
+            Key=key,
+            PartNumber=2,
+            UploadId=upload_id,
+            Body=data
+        )
+        parts.append({"ETag": up2["ETag"], "PartNumber": 2})
+
+        # Complete MPU
+        s3.complete_multipart_upload(
+            Bucket=bucket,
+            Key=key,
+            UploadId=upload_id,
+            MultipartUpload={"Parts": parts},
+        )
+        return {"created": False, "bytes_appended": len(data), "mode": "mpu+copy"}
+    except ClientError as e:
+        # Abort MPU on error
+        try:
+            s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        except Exception:
+            pass
+        # If someone modified the object in between, signal a retry
+        if e.response.get("Error", {}).get("Code") in ("PreconditionFailed", "412"):
+            raise HTTPException(status_code=409, detail="Object changed during append. Retry.")
+        raise
+
+@app.post("/append")
+def append(entry: str):
+    line = (datetime.now().isoformat() + " " + entry + "\n").encode("utf-8")
+    res = append_object(BUCKET, KEY, line)
+    return {"status": "ok", **res}
