@@ -604,3 +604,39 @@ def append(entry: str):
     line = (datetime.now().isoformat() + " " + entry + "\n").encode("utf-8")
     res = append_object(BUCKET, KEY, line)
     return {"status": "ok", **res}
+
+
+
+=======================
+from fastapi import FastAPI, Request, HTTPException, Depends
+import base64
+import gssapi
+
+app = FastAPI()
+
+def kerberos_auth(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Negotiate "):
+        raise HTTPException(status_code=401, detail="Missing Kerberos token")
+
+    token = base64.b64decode(auth_header.split(" ")[1])
+    
+    # GSSAPI server-side context
+    service_name = gssapi.Name("HTTP@myserver.mydomain", gssapi.NameType.hostbased_service)
+    server_creds = gssapi.Credentials(usage="accept", name=service_name)
+
+    ctx = gssapi.SecurityContext(creds=server_creds)
+    
+    try:
+        ctx.step(token)  # Process the client token
+    except Exception:
+        raise HTTPException(status_code=401, detail="Kerberos authentication failed")
+
+    if not ctx.initiator_name:
+        raise HTTPException(status_code=401, detail="Invalid Kerberos token")
+
+    return str(ctx.initiator_name)
+
+@app.get("/secure-data")
+def secure_data(user: str = Depends(kerberos_auth)):
+    return {"message": f"Hello, {user}. You are authenticated with Kerberos!"}
