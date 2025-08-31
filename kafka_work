@@ -45,3 +45,22 @@ query = df_messages.writeStream \
     .start()
 
 query.awaitTermination()
+
+
+==========
+output_df = spark.createDataFrame(
+    [(None, "Hello from Spark with Kerberos!")],
+    ["key", "value"]
+)
+
+(output_df
+    .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    .write
+    .format("kafka")
+    .option("kafka.bootstrap.servers", "d02ycdpedg001.abc.com:9093")
+    .option("kafka.security.protocol", "SASL_SSL")
+    .option("kafka.sasl.mechanism", "GSSAPI")
+    .option("kafka.ssl.ca.location", "/path/to/truststore.pem")
+    .option("topic", "your_topic")
+    .save()
+)
