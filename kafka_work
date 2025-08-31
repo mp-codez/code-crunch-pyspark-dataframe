@@ -1,0 +1,47 @@
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("KafkaExample").getOrCreate()
+
+# Centralized Kafka properties
+kafka_props = {
+    "kafka.bootstrap.servers": "d02ycdpedg001.abc.com:9093",
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.mechanism": "GSSAPI",
+    "kafka.sasl.kerberos.service.name": "kafka",
+    # Optional SSL truststore
+    # "kafka.ssl.truststore.location": "/path/to/truststore.jks",
+    # "kafka.ssl.truststore.password": "password"
+}
+
+# =========================
+# PRODUCER: write DataFrame to Kafka
+# =========================
+df = spark.createDataFrame(
+    [(1, "hello"), (2, "world")],
+    ["id", "msg"]
+)
+
+df.selectExpr("CAST(id AS STRING) as key", "CAST(msg AS STRING) as value") \
+  .write \
+  .format("kafka") \
+  .options(**kafka_props) \
+  .option("topic", "ml-data") \
+  .save()
+
+# =========================
+# CONSUMER: read DataFrame from Kafka
+# =========================
+df_stream = spark.readStream \
+    .format("kafka") \
+    .options(**kafka_props) \
+    .option("subscribe", "ml-data") \
+    .load()
+
+df_messages = df_stream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+
+query = df_messages.writeStream \
+    .format("console") \
+    .outputMode("append") \
+    .start()
+
+query.awaitTermination()
