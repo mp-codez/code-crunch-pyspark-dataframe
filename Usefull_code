@@ -855,3 +855,56 @@ async def append_file(
         return BaseResponse(status="success", data={"message": f"Data appended to {file_name}"})
     except ClientError as e:
         return BaseResponse(status="failure", error=str(e))
+
+==============≈========
+import pandas as pd
+import os
+from hdfs import InsecureClient
+
+# HDFS connection (change to your HDFS URL)
+hdfs_url = "http://namenode:9870"       # or 50070 for older versions
+hdfs_client = InsecureClient(hdfs_url, user='hdfs')
+
+# HDFS base path where folders exist
+base_hdfs_path = "/path/to/base_folder"
+
+# Local temp directory to download files temporarily
+local_tmp = "/tmp/hdfs_excel_files"
+os.makedirs(local_tmp, exist_ok=True)
+
+all_dfs = []
+
+# Step 1️⃣: List all folders inside base_hdfs_path
+folders = hdfs_client.list(base_hdfs_path)
+
+for folder in folders:
+    folder_path = f"{base_hdfs_path}/{folder}"
+    files = hdfs_client.list(folder_path)
+
+    # Step 2️⃣: Read Excel file (assuming only one per folder)
+    for file in files:
+        if file.endswith(".xlsx") or file.endswith(".xls"):
+            hdfs_file_path = f"{folder_path}/{file}"
+            local_file_path = os.path.join(local_tmp, file)
+
+            # Download from HDFS temporarily
+            with hdfs_client.read(hdfs_file_path) as reader, open(local_file_path, 'wb') as f:
+                f.write(reader.read())
+
+            # Read Excel into Pandas DataFrame
+            df = pd.read_excel(local_file_path, dtype=str)  # read all as string for schema mismatch
+            df["source_file"] = file  # optional column for tracking
+            all_dfs.append(df)
+
+# Step 3️⃣: Combine all DataFrames (handles different columns)
+final_df = pd.concat(all_dfs, ignore_index=True).fillna("")
+
+# Step 4️⃣: Save combined result as CSV and upload to HDFS
+local_csv = os.path.join(local_tmp, "merged_data.csv")
+final_df.to_csv(local_csv, index=False)
+
+# Upload CSV to HDFS (overwrite mode)
+output_hdfs_path = "/path/to/output/merged_data.csv"
+hdfs_client.upload(output_hdfs_path, local_csv, overwrite=True)
+
+print(f"✅ All Excel files merged and saved as CSV in HDFS at: {output_hdfs_path}")
