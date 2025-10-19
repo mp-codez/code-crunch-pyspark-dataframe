@@ -100,5 +100,144 @@ SLA for data availability
 
 ---
 
-Would you like this formatted as a PowerPoint or a Word document as well? Or should I generate a one-pager PDF/Markdown you can share directly?
+Would you like this formatted as a PowerPoint or a Word document as well? Or should I generate a one-pager PDF/Markdown you can share directly
+
+
+≈====================
+
+Got it 👍 — so you want to keep the same document structure,
+but add one more clarification:
+
+Even though teams log in via API and get a key (token) for API access,
+the developer also needs to save the Ozone secret key (generated using the ozone getsecret command)
+inside the same dictionary for internal API-to-Ozone communication.
+
+Here’s your final, fully updated Developer Support Document 👇
+
+
+---
+
+🧑‍💻 Developer Support Document
+
+API Integration for Ozone Storage Access
+
+Overview
+
+We have developed an API to store and manage data in Apache Ozone Storage.
+This document explains the onboarding process for any new team that wants to use Ozone through this API.
+
+
+---
+
+1. Onboarding New Team
+
+When a new team needs access to Ozone Storage through the API, follow these steps:
+
+Step 1: Provide Service Account
+
+The new team must share their service account and password with the admin.
+
+This service account will be used for authentication and to generate both API and Ozone-level access keys.
+
+
+Step 2: API Login and Key Generation
+
+The new team logs in using the API login endpoint, providing their service account credentials.
+
+On successful authentication, the API returns an access key (token).
+
+This key must be used in the header for all subsequent API requests.
+
+
+Example:
+
+POST /api/login
+{
+    "service_account": "<team_service_account>",
+    "password": "<password>"
+}
+
+Response:
+
+{
+    "access_key": "eyJhbGciOiJIUzI1NiIsInR5..."
+}
+
+
+---
+
+2. Secret Key Retrieval (for Developer Use)
+
+The developer (admin side) must use the following Ozone command to retrieve the Ozone secret key associated with the team’s service account:
+
+ozone getsecret --service-account <team_service_account>
+
+The secret key obtained from this command must be saved securely in the API code.
+It should be stored inside a dictionary that maps each team to both their API key and Ozone secret key.
+
+
+Example:
+
+ozone_keys = {
+    "team_alpha": {
+        "api_key": "eyJhbGciOiJIUzI1NiIsInR5...",
+        "ozone_secret_key": "SECRET_KEY_123"
+    },
+    "team_beta": {
+        "api_key": "eyJhbGciOiJIUzI1NiIsInR5...",
+        "ozone_secret_key": "SECRET_KEY_456"
+    }
+}
+
+This ensures that the application can internally authenticate with Ozone for operations such as data storage or retrieval.
+
+
+---
+
+3. Bucket Creation and Access Policies
+
+Step 1: Bucket Creation
+
+The admin will create the required bucket(s) in Ozone for the new team based on their storage requirements.
+
+ozone sh bucket create /s3v/<team_bucket_name>
+
+
+Step 2: Ranger Policy Configuration
+
+The admin will configure Apache Ranger policies to define access permissions (read, write, delete, etc.) for the team’s Ozone bucket.
+
+
+
+---
+
+4. Accessing Ozone via API
+
+Once the setup is complete:
+
+Teams can use their API access key to call APIs for data upload, retrieval, and management.
+
+The internal API layer will use the Ozone secret key (stored in the dictionary) to communicate securely with the Ozone storage backend.
+
+
+
+---
+
+5. Summary
+
+Task	Responsible	Description
+
+Provide Service Account	Team	To authenticate and generate Ozone access
+API Login	Team	Obtain access key for API calls
+Retrieve Secret Key	Developer/Admin	Use ozone getsecret command to get Ozone key
+Store Keys in Code	Developer	Save both API key and secret key in dictionary
+Create Bucket	Admin	For team-specific data storage
+Configure Ranger Policy	Admin	Define Ozone access permissions per team
+
+
+
+---
+
+Would you like me to generate this as a PDF or Word (DOCX) document for you to circulate among your development team?
+
 
